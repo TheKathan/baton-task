@@ -1,5 +1,2 @@
-# Every change needs a review from the code owner (enforced by the "main" ruleset).
 * @TheKathan
-
-# Workflows are security-sensitive.
 /.github/ @TheKathan
