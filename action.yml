@@ -1,5 +1,5 @@
 name: baton task board
-description: Give an AI agent's task its own baton board, then export it for the pull request with a summary, failing while questions are open.
+description: Give an AI agent's task its own baton board, then export it with the PR and a summary, failing while questions are open.
 author: TheKathan
 branding:
   icon: clipboard
