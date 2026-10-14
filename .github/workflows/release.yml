@@ -22,44 +22,25 @@ jobs:
           fetch-depth: 0
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
-      - name: Exact version from a release/X.Y.Z branch
-        id: exact
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          src=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].head.ref // ""')
-          if [[ "$src" =~ ^release/v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-            v="v${BASH_REMATCH[1]}"
-            if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
-              echo "::error::tag $v already exists"; exit 1
-            fi
-            echo "version=$v" >> "$GITHUB_OUTPUT"
-            echo "Exact release $v from $src" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Version
+      - uses: TheKathan/trunk-semver@bdfa679941c534feeb98f967803cff48cdc3455e # v1.0.14
         id: version
-        if: steps.exact.outputs.version == ''
-        uses: TheKathan/trunk-semver@bdfa679941c534feeb98f967803cff48cdc3455e # v1.0.14
         with:
           major-version: "1"
           add-to-summary: "true"
 
       - name: Tag the version and move the major tag
         env:
-          VERSION: ${{ steps.exact.outputs.version || steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          MAJOR="${VERSION%%.*}"
           git tag -f "$VERSION"
-          git tag -f "$MAJOR"
-          git push --force origin "refs/tags/$VERSION" "refs/tags/$MAJOR"
+          git tag -f "${VERSION%%.*}"
+          git push --force origin "refs/tags/$VERSION" "refs/tags/${VERSION%%.*}"
 
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.exact.outputs.version || steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           if gh release view "$VERSION" >/dev/null 2>&1; then
