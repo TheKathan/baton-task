@@ -1,0 +1,41 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  BATON_VERSION: d6a93d3ffb4784da45ff19c989752d1a74318829  # baton 1.4 (adds `baton report`); switch to v1 once 1.4.0 is released
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: action
+      - name: A scratch git repo in the workspace
+        run: git init -q -b main . && git config user.name test && git config user.email test@example.com && git commit -q --allow-empty -m init
+      - uses: ./action
+        with: { mode: start, task: T-1, version: "${{ env.BATON_VERSION }}" }
+      - run: baton post Q --as qa --to backend --title "Is the route ready?" "for the e2e"
+      - uses: ./action
+        id: open
+        continue-on-error: true
+        with: { mode: finish, task: T-1, strict: true, install: false }
+      - name: strict finish fails while Q-001 is open
+        run: test "${{ steps.open.outcome }}" = failure && test "${{ steps.open.outputs.open }}" = 1
+      - run: baton reply Q-001 --as backend --close "yes"
+      - uses: ./action
+        id: done
+        with: { mode: finish, task: T-1, strict: true, install: false }
+      - name: settled board passes and is staged
+        run: |
+          test "${{ steps.done.outputs.open }}" = 0
+          test -s "${{ steps.done.outputs.summary-file }}"
+          git diff --cached --name-only | grep -qx .baton/tasks/T-1.jsonl
