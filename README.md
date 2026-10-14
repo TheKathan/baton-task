@@ -46,8 +46,4 @@ Put one step before the agent and one after it:
 
 Needs baton 1.4 or newer, on Linux or macOS runners. See [sandbox mode](https://github.com/TheKathan/baton/blob/main/docs/sandbox.md).
 
-## Versions
-
-Releases follow the same trunk-based semver as [baton](https://github.com/TheKathan/baton): every merged PR is released, a `feature/*` branch bumps the minor version and any other branch the patch version. Use `@v1` for the latest 1.x, or pin an exact tag such as `@v1.0.1`.
-
 MIT licensed.
