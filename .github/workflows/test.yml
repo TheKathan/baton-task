@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  BATON_VERSION: v1  # the latest baton 1.x, as users get by default
+  BATON_VERSION: v1
 jobs:
   test:
     strategy:

@@ -1,15 +1,5 @@
 name: release
 
-# Versioning is trunk-based (TheKathan/trunk-semver), the same as TheKathan/baton: every
-# PR merged into main is released. The merged PR's source branch picks the bump:
-#   feature/* or feat/*  -> minor (1.0.0 -> 1.1.0)
-#   anything else        -> patch (1.0.0 -> 1.0.1)
-#   release/X.Y.Z        -> exactly vX.Y.Z (for a new major such as 2.0.0, which bumps can't reach)
-# The version tag and the moving major tag (v1) point at the merge commit, and a GitHub
-# release is published with notes generated from the merged PRs.
-#
-# Tags are pushed through a deploy key, the only actor the ruleset on v* tags lets through.
-# The key lives in the "release" environment, which only main may use.
 
 on:
   push:
@@ -20,8 +10,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write       # gh release create
-  pull-requests: read   # trunk-semver looks up the merged PR's source branch
+  contents: write
+  pull-requests: read
 
 jobs:
   release:
