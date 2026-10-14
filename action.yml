@@ -1,0 +1,82 @@
+name: baton task board
+description: Give an AI agent's task its own baton board, then export it for the pull request with a summary, failing while questions are open.
+author: TheKathan
+branding:
+  icon: clipboard
+  color: orange
+
+inputs:
+  mode:
+    description: "start: create or resume the task's board, before the agent runs. finish: export it, stage it and write the summary, after the agent runs."
+    required: true
+  task:
+    description: The issue id, e.g. LIN-123. Letters, digits, '.', '_' or '-'.
+    required: true
+  roles:
+    description: "With mode: start: comma-separated roles. Default: the project's .baton/config.json roles, or any role."
+    default: ""
+  strict:
+    description: "With mode: finish: fail the step while a question or blocker is still open."
+    default: "false"
+  stage:
+    description: "With mode: finish: git add the exported .baton/tasks/<task>.jsonl."
+    default: "true"
+  install:
+    description: Install baton first with TheKathan/setup-baton. Set to "false" if an earlier step did.
+    default: "true"
+  version:
+    description: baton version to install (see TheKathan/setup-baton).
+    default: v1
+
+outputs:
+  summary-file:
+    description: "mode: finish: path of the Markdown PR summary."
+    value: ${{ steps.finish.outputs.summary-file }}
+  open:
+    description: "mode: finish: number of open questions and blockers."
+    value: ${{ steps.finish.outputs.open }}
+
+runs:
+  using: composite
+  steps:
+    - uses: TheKathan/setup-baton@v1
+      if: inputs.install == 'true'
+      with:
+        version: ${{ inputs.version }}
+    - name: Start the task board
+      if: inputs.mode == 'start'
+      shell: bash
+      env:
+        TASK: ${{ inputs.task }}
+        ROLES: ${{ inputs.roles }}
+      run: |
+        args=(init --sandbox --task "$TASK")
+        [ -n "$ROLES" ] && args+=(--roles "$ROLES")
+        baton "${args[@]}"
+    - id: finish
+      name: Finish the task board
+      if: inputs.mode == 'finish'
+      shell: bash
+      env:
+        TASK: ${{ inputs.task }}
+        STRICT: ${{ inputs.strict }}
+        STAGE: ${{ inputs.stage }}
+      run: |
+        summary="$RUNNER_TEMP/baton-$TASK-summary.md"
+        baton finish --summary "$summary"
+        export_file=".baton/tasks/$TASK.jsonl"
+        open="$(baton report "$export_file" --json | python3 -c 'import json,sys; print(sum(len(r["open_asks"]) for r in json.load(sys.stdin)))')"
+        { cat "$summary"; echo; } >> "$GITHUB_STEP_SUMMARY"
+        echo "summary-file=$summary" >> "$GITHUB_OUTPUT"
+        echo "open=$open" >> "$GITHUB_OUTPUT"
+        [ "$STAGE" = "true" ] && git add "$export_file"
+        if [ "$STRICT" = "true" ] && [ "$open" != "0" ]; then
+          echo "::error::$TASK: $open question(s)/blocker(s) still open on the board"
+          exit 1
+        fi
+    - name: Check the mode
+      if: inputs.mode != 'start' && inputs.mode != 'finish'
+      shell: bash
+      run: |
+        echo "::error::mode must be start or finish"
+        exit 1
