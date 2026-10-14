@@ -1,0 +1,80 @@
+name: release
+
+# Versioning is trunk-based (TheKathan/trunk-semver), the same as TheKathan/baton: every
+# PR merged into main is released. The merged PR's source branch picks the bump:
+#   feature/* or feat/*  -> minor (1.0.0 -> 1.1.0)
+#   anything else        -> patch (1.0.0 -> 1.0.1)
+#   release/X.Y.Z        -> exactly vX.Y.Z (for a new major such as 2.0.0, which bumps can't reach)
+# The version tag and the moving major tag (v1) point at the merge commit, and a GitHub
+# release is published with notes generated from the merged PRs.
+#
+# Tags are pushed through a deploy key, the only actor the ruleset on v* tags lets through.
+# The key lives in the "release" environment, which only main may use.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # gh release create
+  pull-requests: read   # trunk-semver looks up the merged PR's source branch
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      - name: Exact version from a release/X.Y.Z branch
+        id: exact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          src=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].head.ref // ""')
+          if [[ "$src" =~ ^release/v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            v="v${BASH_REMATCH[1]}"
+            if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+              echo "::error::tag $v already exists"; exit 1
+            fi
+            echo "version=$v" >> "$GITHUB_OUTPUT"
+            echo "Exact release $v from $src" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Version
+        id: version
+        if: steps.exact.outputs.version == ''
+        uses: TheKathan/trunk-semver@bdfa679941c534feeb98f967803cff48cdc3455e # v1.0.14
+        with:
+          major-version: "1"
+          add-to-summary: "true"
+
+      - name: Tag the version and move the major tag
+        env:
+          VERSION: ${{ steps.exact.outputs.version || steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          MAJOR="${VERSION%%.*}"
+          git tag -f "$VERSION"
+          git tag -f "$MAJOR"
+          git push --force origin "refs/tags/$VERSION" "refs/tags/$MAJOR"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.exact.outputs.version || steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "release $VERSION already exists"
+            exit 0
+          fi
+          gh release create "$VERSION" --title "$VERSION" --generate-notes --verify-tag
