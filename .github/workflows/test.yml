@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 env:
-  BATON_VERSION: d6a93d3ffb4784da45ff19c989752d1a74318829  # baton 1.4 (adds `baton report`); switch to v1 once 1.4.0 is released
+  BATON_VERSION: v1  # the latest baton 1.x, as users get by default
 jobs:
   test:
     strategy:
